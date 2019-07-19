@@ -1,4 +1,4 @@
-package main
+package varnishexporter
 
 import (
 	"bufio"
@@ -19,7 +19,47 @@ var (
 	DescCache = &descCache{
 		descs: make(map[string]*prometheus.Desc),
 	}
+
+	VarnishVersion = NewVarnishVersion()
+	ExitHandler    = &exitHandler{}
 )
+
+type exitHandler struct {
+	sync.RWMutex
+	ExitOnError bool
+	err         error
+}
+
+func (ex *exitHandler) Errorf(format string, a ...interface{}) error {
+	return ex.Set(fmt.Errorf(format, a...))
+}
+
+func (ex *exitHandler) HasError() bool {
+	ex.RLock()
+	hasError := ex.err != nil
+	ex.RUnlock()
+	return hasError
+}
+
+func (ex *exitHandler) Set(err error) error {
+	ex.Lock()
+	defer ex.Unlock()
+
+	if err == nil {
+		ex.err = nil
+		return nil
+	}
+
+	errDiffers := ex.err == nil || ex.err.Error() != err.Error()
+	ex.err = err
+
+	if ex.ExitOnError {
+		LogFatal("%s", err.Error())
+	} else if errDiffers {
+		LogError("%s", err.Error())
+	}
+	return err
+}
 
 type descCache struct {
 	sync.RWMutex
@@ -73,14 +113,14 @@ func ScrapeVarnishFrom(buf []byte, ch chan<- prometheus.Metric) ([]byte, error) 
 		}
 		if dt := reflect.TypeOf(raw); dt.Kind() != reflect.Map {
 			if StartParams.Verbose {
-				logWarn("Found unexpected data from json: %s: %#v", vName, raw)
+				LogWarn("Found unexpected data from json: %s: %#v", vName, raw)
 			}
 			continue
 		}
 		data, ok := raw.(map[string]interface{})
 		if !ok {
 			if StartParams.Verbose {
-				logWarn("Failed to cast to map[string]interface{}: %s: %#v", vName, raw)
+				LogWarn("Failed to cast to map[string]interface{}: %s: %#v", vName, raw)
 			}
 			continue
 		}
@@ -120,7 +160,7 @@ func ScrapeVarnishFrom(buf []byte, ch chan<- prometheus.Metric) ([]byte, error) 
 		}
 		if vErr != nil {
 			if StartParams.Verbose {
-				logWarn(vErr.Error())
+				LogWarn(vErr.Error())
 			}
 			continue
 		}

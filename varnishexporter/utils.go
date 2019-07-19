@@ -1,65 +1,115 @@
-package main
+package varnishexporter
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 )
 
+var (
+	Logger = log.New(os.Stdout, "", log.Ldate|log.Ltime)
+
+	StartParams = &startParams{
+		ListenAddress:  ":9131", // Reserved and publicly announced at https://github.com/prometheus/prometheus/wiki/Default-port-allocations
+		Path:           "/metrics",
+		VarnishstatExe: "varnishstat",
+		Params:         &varnishstatParams{},
+	}
+)
+
+type startParams struct {
+	ListenAddress          string
+	Path                   string
+	HealthPath             string
+	VarnishstatExe         string
+	VarnishDockerContainer string
+	Params                 *varnishstatParams
+
+	Verbose       bool
+	ExitOnErrors  bool
+	Test          bool
+	Raw           bool
+	WithGoMetrics bool
+
+	NoExit bool // deprecated
+}
+
+type varnishstatParams struct {
+	Instance string
+	VSM      string
+}
+
+func (p *varnishstatParams) isEmpty() bool {
+	return p.Instance == "" && p.VSM == ""
+}
+
+func (p *varnishstatParams) make() (params []string) {
+	// -n
+	if p.Instance != "" {
+		params = append(params, "-n", p.Instance)
+	}
+	// -N is not supported by 3.x
+	if p.VSM != "" && VarnishVersion.EqualsOrGreater(4, 0) {
+		params = append(params, "-N", p.VSM)
+	}
+	return params
+}
+
 // logging
 
-func logRaw(format string, args ...interface{}) {
+func LogRaw(format string, args ...interface{}) {
 	fmt.Printf(format+"\n", args...)
 }
 
-func logTitle(format string, args ...interface{}) {
-	logInfo(format, args...)
+func LogTitle(format string, args ...interface{}) {
+	LogInfo(format, args...)
 
 	title := strings.Repeat("-", len(fmt.Sprintf(format, args...)))
 	if len(title) > 0 {
-		logInfo(title)
+		LogInfo(title)
 	}
 }
 
-func logInfo(format string, args ...interface{}) {
+func LogInfo(format string, args ...interface{}) {
 	if StartParams.Raw {
-		logRaw(format, args...)
+		LogRaw(format, args...)
 	} else {
-		logger.Printf(format, args...)
+		Logger.Printf(format, args...)
 	}
 }
 
-func logWarn(format string, args ...interface{}) {
+func LogWarn(format string, args ...interface{}) {
 	format = "[WARN] " + format
 	if StartParams.Raw {
-		logRaw(format, args...)
+		LogRaw(format, args...)
 	} else {
-		logger.Printf(format, args...)
+		Logger.Printf(format, args...)
 	}
 }
 
-func logError(format string, args ...interface{}) {
+func LogError(format string, args ...interface{}) {
 	format = "[ERROR] " + format
 	if StartParams.Raw {
-		logRaw(format, args...)
+		LogRaw(format, args...)
 	} else {
-		logger.Printf(format, args...)
+		Logger.Printf(format, args...)
 	}
 }
 
-func logFatal(format string, args ...interface{}) {
+func LogFatal(format string, args ...interface{}) {
 	format = "[FATAL] " + format
 	if StartParams.Raw {
-		logRaw(format, args...)
+		LogRaw(format, args...)
 	} else {
-		logger.Printf(format, args...)
+		Logger.Printf(format, args...)
 	}
 	os.Exit(1)
 }
 
-func logFatalError(err error) {
+func LogFatalError(err error) {
 	if err != nil {
-		logFatal(err.Error())
+		LogFatal(err.Error())
 	}
 }
 
