@@ -1,4 +1,4 @@
-package main
+package varnishexporter
 
 import (
 	"regexp"
@@ -11,6 +11,10 @@ import (
 
 const (
 	exporterNamespace = "varnish"
+)
+
+var (
+	PrometheusExporter = NewPrometheusExporter()
 )
 
 // prometheusExporter
@@ -53,7 +57,7 @@ func (pe *prometheusExporter) Describe(ch chan<- *prometheus.Desc) {
 	}
 
 	if StartParams.Verbose {
-		logInfo("prometheus.Collector.Describe  %s", time.Now().Sub(start))
+		LogInfo("prometheus.Collector.Describe  %s", time.Now().Sub(start))
 	}
 }
 
@@ -84,7 +88,7 @@ func (pe *prometheusExporter) Collect(ch chan<- prometheus.Metric) {
 
 	if err == nil {
 		if hadError {
-			logInfo("Successful scrape")
+			LogInfo("Successful scrape")
 		}
 		pe.up.Set(1)
 	} else {
@@ -101,7 +105,7 @@ func (pe *prometheusExporter) Collect(ch chan<- prometheus.Metric) {
 		if err != nil {
 			postfix = " (scrape failed)"
 		}
-		logInfo("prometheus.Collector.Collect   %s%s", time.Now().Sub(start), postfix)
+		LogInfo("prometheus.Collector.Collect   %s%s", time.Now().Sub(start), postfix)
 	}
 }
 
